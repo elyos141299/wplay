@@ -187,6 +187,8 @@ jobs:
 
       # Dari gst-plugins-bad, pipeline video UxPlay memakai:
       # - videoparsersbad: h264parse/h265parse (parser bawaan UxPlay)
+      #   (nama opsi meson-nya di 1.28 cuma "videoparsers" — opsi
+      #   "videoparsersbad" ditolak sebagai Unknown option)
       # - wasapi: wasapisink, pilihan keluaran audio modern Windows
       #   untuk autoaudiosink (upstream juga membundelnya)
       # Versi 1.28.9 supaya sekeluarga dengan GStreamer/FFmpeg yang
@@ -203,7 +205,7 @@ jobs:
             --prefix=/mingw64 \
             --libdir=lib \
             --auto-features=disabled \
-            -Dvideoparsersbad=enabled \
+            -Dvideoparsers=enabled \
             -Dwasapi=enabled \
             -Dtests=disabled \
             -Dexamples=disabled \
