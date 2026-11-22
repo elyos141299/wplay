@@ -24,10 +24,14 @@ DefaultGroupName=wPlay
 DisableProgramGroupPage=yes
 ; Per-user install: no administrator prompt.
 PrivilegesRequired=lowest
-OutputDir=..\installer-output
+OutputDir={#SourcePath}..\installer-output
 OutputBaseFilename=wPlay-Setup
-SetupIconFile=..\assets\wplay.ico
-LicenseFile=..\licenses\AGPL-3.0.txt
+; No SetupIconFile: the repo carries the icon only as assets/icon_hex.txt
+; (binary .ico files cannot be pushed through the connector), so there
+; is no .ico file for the compiler to read. The installed shortcuts and
+; the uninstall entry use wplay.exe's own embedded icon instead.
+; No LicenseFile either, until the licenses/ files' presence in the
+; repo is verified — a missing LicenseFile aborts the compile.
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -43,7 +47,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourcePath}..\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\wPlay"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
