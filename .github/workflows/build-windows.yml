@@ -359,3 +359,27 @@ jobs:
           name: wplay-windows-x86_64
           path: dist
           if-no-files-found: error
+
+      # Installer Windows (diminta user 23 Nov 2026): bungkus dist/
+      # yang sama persis dengan Inno Setup menjadi satu file
+      # wPlay-Setup.exe (pintasan Start Menu/Desktop + uninstaller).
+      # Runner windows-2022 SUDAH membawa Inno Setup terpasang
+      # (terverifikasi di daftar software resmi runner-images:
+      # "InnoSetup 6.7.1"), jadi tidak ada langkah install tambahan.
+      # Langkah ini murni tambahan di akhir — tidak mengubah build
+      # aplikasi sama sekali.
+      - name: Build installer (Inno Setup)
+        shell: powershell
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe (Inno Setup) not found on runner" }
+          & $iscc "installer\wplay.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed with exit code $LASTEXITCODE" }
+
+      - name: Upload wplay installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wplay-setup
+          path: installer-output/wPlay-Setup.exe
+          if-no-files-found: error
