@@ -20,7 +20,27 @@ cpp! {{
     #include <QVariant>
     #include <QObject>
     #include <QQuickItem>
+    #include <QQuickWindow>
+    #include <QSGRendererInterface>
 }}
+
+// wPlay (Phase 3): paksa Qt Quick memakai OpenGL. Ini potongan dari
+// native::configure_application() upstream yang dulu tidak ikut
+// diporting (lihat FIXME di main.rs) — komentar upstream-nya persis:
+// "uxplay now uses qml6glsink so we have to use opengl".
+// Tanpa ini, Qt 6 di Windows memakai Direct3D untuk scene graph,
+// dan qml6glsink gagal total: log GST_DEBUG di PC user menunjukkan
+// "scene graph initialized with a non-OpenGL renderer interface"
+// lalu "failed to retrieve wrapped context (NULL)" ->
+// "Could not initialize window system" -> video renderer mati.
+// Di Linux tidak perlu (platform xcb memang OpenGL), sama seperti
+// pengecualian upstream.
+#[cfg(not(target_os = "linux"))]
+pub fn force_opengl_graphics_api() {
+    cpp!(unsafe [] {
+        QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    })
+}
 
 //FIXME: this may be called multiple times?
 pub fn force_load_gst_gl() -> bool {

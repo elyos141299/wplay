@@ -41,6 +41,9 @@ fn main() {
     // aplikasi/organisasi Qt, font bawaan Windows, dll). wPlay belum
     // punya lapisan native Rust; nama aplikasi mengikuti nama binary
     // ("wplay"). Tambahkan bila nanti perlu QSettings/branding penuh.
+    // Bagian configure_application yang WAJIB sudah diporting:
+    // QQuickWindow::setGraphicsApi(OpenGL) — lihat
+    // gst_gl::force_opengl_graphics_api() di bawah.
 
     #[cfg(not(debug_assertions))]
     crate::ui_qrc::qml();
@@ -62,6 +65,12 @@ fn main() {
             );
         }
     }
+
+    // wPlay (Phase 3): paksa OpenGL untuk Qt Quick sebelum jendela
+    // dibuat — qml6glsink tidak bisa jalan di atas renderer
+    // Direct3D bawaan Qt 6 Windows (lihat gst_gl.rs).
+    #[cfg(not(target_os = "linux"))]
+    crate::gst_gl::force_opengl_graphics_api();
 
     // wPlay (Phase 3, tes perangkat pertama): muat plugin qml6glsink
     // SEBELUM Main.qml dibaca engine. Tipe GstGLQt6VideoItem yang
