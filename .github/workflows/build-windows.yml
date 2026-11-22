@@ -224,14 +224,49 @@ jobs:
         run: |
           RUSTFLAGS="" cargo build --release
 
-      - name: Upload wplay.exe artifact
+      # Phase 3 (setelah build pertama HIJAU di run #7): bundel paket
+      # portabel. Meniru pola packaging/windows/portable/deploy.sh
+      # upstream, disesuaikan dengan isi MSYS2 mingw64 kita:
+      # - windeployqt6 menyalin runtime Qt + modul QML ke dist/
+      # - plugin GStreamer disalin ke dist/gstreamer-1.0 (folder yang
+      #   memang dicari main.rs wPlay di build rilis Windows).
+      #   Daftarnya hanya plugin core+base+qml6 yang TERSEDIA di
+      #   mingw64 kita; plugin good/bad/libav tidak ada di repo
+      #   mingw64 lagi, jadi yang tidak ketemu dilewati dengan pesan,
+      #   bukan menggagalkan build.
+      # - sisa DLL (FFmpeg, GStreamer, glib, OpenSSL, libplist, ...)
+      #   dikumpulkan otomatis dari hasil `ldd` atas exe + plugin,
+      #   supaya tidak perlu daftar nama DLL manual yang cepat basi.
+      - name: Bundle portable package
+        run: |
+          qt_bin="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")/bin"
+          rm -rf dist
+          mkdir -p dist/gstreamer-1.0
+          cp target/release/wplay.exe dist/
+
+          "$qt_bin/windeployqt6.exe" --qmldir src/ui --dir dist --plugindir dist/plugins dist/wplay.exe
+
+          PLUGINS="libgstcoreelements libgstapp libgstqml6 libgstopengl libgstvideoconvert libgstvideoconvertscale libgstplayback libgsttypefindfunctions libgstaudioconvert libgstaudioresample libgstvolume libgstgio libgstvideorate libgstoverlaycomposition"
+          for p in $PLUGINS; do
+            f=$(ls /mingw64/lib/gstreamer-1.0/${p}*.dll 2>/dev/null | head -n1 || true)
+            if [ -n "$f" ]; then
+              echo "plugin: $f"
+              cp "$f" dist/gstreamer-1.0/
+            else
+              echo "plugin not present, skipped: $p"
+            fi
+          done
+
+          for f in dist/wplay.exe dist/gstreamer-1.0/*.dll; do
+            ldd "$f" 2>/dev/null | grep -oE '/mingw64/bin/[^ ]+\.dll' || true
+          done | sort -u | while read -r d; do cp "$d" dist/; done
+
+          echo "=== dist contents ==="
+          ls -la dist dist/gstreamer-1.0
+
+      - name: Upload wplay portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: wplay-windows-x86_64
-          path: target/release/wplay.exe
+          path: dist
           if-no-files-found: error
-        # CATATAN Phase 3: .exe mentah ini belum tentu jalan di PC lain
-        # karena DLL Qt/GStreamer belum dibundel. Langkah deploy
-        # (windeployqt + menyalin DLL & plugin GStreamer, meniru
-        # packaging/windows/portable/deploy.sh upstream) ditambahkan
-        # setelah build pertama terbukti lolos.
