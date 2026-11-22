@@ -53,6 +53,13 @@ jobs:
       # CATATAN runtime: plugin decoder (avdec_h264 dari gst-libav
       # dkk) masih dibutuhkan saat tes mirror nanti — itu diurus
       # di tahap bundel/test, bukan di build pertama ini.
+      # REVISI Phase 3 (run #4): tambah mingw-w64-x86_64-ffmpeg —
+      # CMake-nya wPlay mewajibkan libavformat/libavcodec/libavutil/
+      # libswscale (semua dari FFmpeg). Di workflow upstream paket
+      # ini datang diam-diam sebagai dependensi gst-libav; begitu
+      # gst-libav dibuang, FFmpeg-nya ikut hilang dan Build mati
+      # dengan "libavformat not found". Paket ffmpeg masih ada di
+      # mingw64 (terverifikasi di packages.msys2.org).
       - name: Install deps using pacman
         run: |
           pacman -S --needed --noconfirm \
@@ -74,6 +81,7 @@ jobs:
           mingw-w64-x86_64-libzip \
           mingw-w64-x86_64-gstreamer \
           mingw-w64-x86_64-gst-plugins-base \
+          mingw-w64-x86_64-ffmpeg \
           mingw-w64-x86_64-libarchive \
           mingw-w64-x86_64-rustup \
           mingw-w64-x86_64-clang
