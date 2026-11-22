@@ -263,14 +263,16 @@ ApplicationWindow {
         }
     }
 
-    // Bar bawah, tampil setelah iPhone tersambung.
+    // Bar atas (permintaan user 23 Nov 2026): kontrol pindah dari
+    // bar bawah ke strip atas sepenuh lebar jendela, isi rata kiri —
+    // titik status + nama perangkat, Rotate, Volume. Tombol tidak
+    // bisa tinggal di dalam title bar Windows bawaan, jadi strip ini
+    // duduk persis di bawahnya. Tampil setelah iPhone tersambung.
     Rectangle {
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.margins: 18
-        width: Math.min(parent.width - 36, hudLayout.implicitWidth + 24)
-        height: hudLayout.implicitHeight + 20
-        radius: 14
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: hudLayout.implicitHeight + 16
         color: "#e00d1622"
         border.color: "#2a3c55"
         border.width: 1
