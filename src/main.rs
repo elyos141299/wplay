@@ -8,12 +8,15 @@
 // AirplayImp dan pemuatan QML (filesystem saat debug, qrc saat rilis,
 // sama seperti pola upstream).
 
-// Build rilis berjalan sebagai aplikasi GUI murni (tanpa jendela
-// konsol). Sempat dimatikan sementara selama diagnosis Phase 3
-// (supaya log GLib/GStreamer tercetak ke cmd saat memburu crash
-// 0x40000015) dan dikembalikan 22 Nov 2026 setelah mirroring iPhone
-// terbukti jalan di PC user.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// DIAGNOSIS BISECT (23 Nov 2026): atribut windows_subsystem
+// dimatikan lagi sementara. Build final (subsystem aktif + UI baru
+// + ikon) crash 0xc000001d saat startup di PC user; bisect ikon
+// sudah gugur (tetap crash tanpa ikon). Langkah ini mengembalikan
+// source PERSIS ke keadaan build yang terbukti jalan 22 Nov 10:58
+// (konsol diagnosis + Main.qml lama) untuk memisahkan "regresi
+// source" vs "perubahan lingkungan build". Kembalikan setelah
+// penyebab ketemu:
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use qmetaobject::prelude::*;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};

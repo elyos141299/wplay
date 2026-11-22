@@ -1,20 +1,13 @@
 // SPDX-FileCopyrightText: 2025-2026 Uncore <https://github.com/uncor3>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// wPlay: jendela AirPlay. Ini penyederhanaan besar dari
+// wPlay: jendela AirPlay polos. Ini penyederhanaan besar dari
 // src/ui/tools/Airplay.qml iDescriptor v0.6.1 (±520 baris):
 // dibuang — video tutorial, Theme/Settings/DeviceContext iDescriptor,
 // StateView, dialog info koneksi, zoom/tampilan HUD ala FluentUI.
 // dipertahankan — GstGLQt6VideoItem (qml6glsink) sebagai layar video,
 // putar 90°, slider volume, status koneksi + nama perangkat.
 // Semua teks memakai qsTr, sesuai aturan project upstream.
-//
-// Tampilan diperbarui 22 Nov 2026 ("paket lengkap" atas permintaan
-// user): tema navy gelap kalem + aksen steel, logo wPlay digambar
-// Canvas (segitiga play + gelombang cast, sama seperti ikon exe),
-// layar tunggu berisi langkah koneksi bernomor, dan bar kontrol
-// bawah bergaya custom (tombol + slider). Logika koneksi TIDAK
-// berubah dari versi sebelumnya.
 
 import QtQuick
 import QtQuick.Controls
@@ -31,13 +24,7 @@ ApplicationWindow {
     minimumHeight: 480
     visible: true
     title: qsTr("wPlay")
-    color: "#0a0f1a"
-
-    // Palet tema wPlay (navy kalem + steel)
-    readonly property color accent: "#7fb2e0"
-    readonly property color panel: "#141f31"
-    readonly property color panelBorder: "#22344d"
-    readonly property color textDim: "#9db2c8"
+    color: "#111111"
 
     property bool serverRunning: false
     property bool clientConnected: false
@@ -109,147 +96,37 @@ ApplicationWindow {
     // Layar tunggu, tampil selama belum ada iPhone yang tersambung.
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 14
+        spacing: 12
         visible: !root.clientConnected
-
-        // Logo wPlay: ubin navy + segitiga play + gelombang cast,
-        // digambar Canvas (sama seperti ikon wplay.exe).
-        Rectangle {
-            Layout.alignment: Qt.AlignHCenter
-            width: 104
-            height: 104
-            radius: 26
-            border.color: "#2c4a6b"
-            border.width: 1
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#1a2f47" }
-                GradientStop { position: 1.0; color: "#0b1322" }
-            }
-
-            Canvas {
-                anchors.fill: parent
-                onPaint: {
-                    const ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    // gelombang cast (steel)
-                    ctx.strokeStyle = "#7fb2e0"
-                    ctx.lineWidth = 5
-                    ctx.lineCap = "round"
-                    const cx = 70, cy = 33
-                    for (const r of [10, 19, 28]) {
-                        ctx.beginPath()
-                        ctx.arc(cx, cy, r, -1.0, 0.55)
-                        ctx.stroke()
-                    }
-                    ctx.fillStyle = "#7fb2e0"
-                    ctx.beginPath()
-                    ctx.arc(cx, cy, 4, 0, Math.PI * 2)
-                    ctx.fill()
-                    // segitiga play (putih)
-                    ctx.fillStyle = "#f5f8fc"
-                    ctx.beginPath()
-                    ctx.moveTo(36, 34)
-                    ctx.lineTo(36, 72)
-                    ctx.lineTo(68, 53)
-                    ctx.closePath()
-                    ctx.fill()
-                }
-            }
-        }
 
         Label {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("wPlay")
             color: "white"
-            font.pixelSize: 34
+            font.pixelSize: 32
             font.bold: true
-            font.letterSpacing: 1
+        }
+
+        BusyIndicator {
+            Layout.alignment: Qt.AlignHCenter
+            running: root.serverRunning && !root.clientConnected
+        }
+
+        Label {
+            id: statusLabel
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("Starting AirPlay Server...")
+            color: "white"
+            font.pixelSize: 16
         }
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("AIRPLAY RECEIVER")
-            color: root.accent
-            font.pixelSize: 11
-            font.bold: true
-            font.letterSpacing: 3
-        }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 10
-
-            BusyIndicator {
-                running: root.serverRunning && !root.clientConnected
-                implicitWidth: 22
-                implicitHeight: 22
-            }
-
-            Label {
-                id: statusLabel
-                text: qsTr("Starting AirPlay Server...")
-                color: "white"
-                font.pixelSize: 15
-            }
-        }
-
-        // Kartu langkah koneksi
-        Rectangle {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 6
-            implicitWidth: stepsLayout.implicitWidth + 36
-            implicitHeight: stepsLayout.implicitHeight + 28
-            radius: 14
-            color: root.panel
-            border.color: root.panelBorder
-            border.width: 1
-
-            ColumnLayout {
-                id: stepsLayout
-                anchors.centerIn: parent
-                spacing: 10
-
-                Repeater {
-                    model: [
-                        qsTr("Connect your iPhone and this PC to the same Wi-Fi"),
-                        qsTr("Open Control Center, then tap Screen Mirroring"),
-                        qsTr("Select “wPlay” from the list")
-                    ]
-
-                    RowLayout {
-                        spacing: 10
-
-                        Rectangle {
-                            width: 22
-                            height: 22
-                            radius: 11
-                            color: "#24466b"
-
-                            Label {
-                                anchors.centerIn: parent
-                                text: index + 1
-                                color: "white"
-                                font.pixelSize: 12
-                                font.bold: true
-                            }
-                        }
-
-                        Label {
-                            text: modelData
-                            color: "#d5dee9"
-                            font.pixelSize: 13
-                        }
-                    }
-                }
-            }
-        }
-
-        Label {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 4
-            text: qsTr("Tip: in OBS, add this window with Window Capture.")
-            color: root.textDim
-            font.pixelSize: 12
+            Layout.preferredWidth: 480
+            text: qsTr("Open Control Center on your iPhone, choose Screen Mirroring, then select wPlay.")
+            color: "#bbbbbb"
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
@@ -260,10 +137,8 @@ ApplicationWindow {
         anchors.margins: 18
         width: Math.min(parent.width - 36, hudLayout.implicitWidth + 24)
         height: hudLayout.implicitHeight + 20
-        radius: 14
-        color: "#e00d1622"
-        border.color: "#2a3c55"
-        border.width: 1
+        radius: 10
+        color: "#cc222222"
         visible: root.clientConnected
 
         RowLayout {
@@ -273,13 +148,6 @@ ApplicationWindow {
             anchors.rightMargin: 12
             spacing: 10
 
-            Rectangle {
-                width: 8
-                height: 8
-                radius: 4
-                color: "#3ddc84"
-            }
-
             Label {
                 text: root.parsedModel !== "" ? root.parsedModel : root.clientDeviceName
                 color: "white"
@@ -287,27 +155,8 @@ ApplicationWindow {
             }
 
             Button {
-                id: rotateBtn
                 text: qsTr("Rotate")
                 onClicked: root.rotationTurns += 1
-
-                contentItem: Text {
-                    text: rotateBtn.text
-                    color: "white"
-                    font.pixelSize: 13
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: 12
-                    rightPadding: 12
-                    topPadding: 6
-                    bottomPadding: 6
-                }
-                background: Rectangle {
-                    radius: 8
-                    color: rotateBtn.down ? "#33517a" : (rotateBtn.hovered ? "#2a4568" : "#1d3049")
-                    border.color: "#33506f"
-                    border.width: 1
-                }
             }
 
             Label {
@@ -324,32 +173,6 @@ ApplicationWindow {
                 value: 100
                 stepSize: 1
                 onMoved: root.setMasterVolume(value)
-
-                background: Rectangle {
-                    x: volumeSlider.leftPadding
-                    y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                    width: volumeSlider.availableWidth
-                    height: 4
-                    radius: 2
-                    color: "#2a3c55"
-
-                    Rectangle {
-                        width: volumeSlider.visualPosition * parent.width
-                        height: parent.height
-                        radius: 2
-                        color: root.accent
-                    }
-                }
-                handle: Rectangle {
-                    x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
-                    y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                    width: 16
-                    height: 16
-                    radius: 8
-                    color: volumeSlider.pressed ? "#dbe9f7" : "white"
-                    border.color: root.accent
-                    border.width: 2
-                }
             }
         }
     }
