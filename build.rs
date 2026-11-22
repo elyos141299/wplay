@@ -91,7 +91,21 @@ fn main() {
     cmake_config
         .build_target("wplay_native")
         .define("CMAKE_BUILD_TYPE", "Debug")
-        .define("CMAKE_PREFIX_PATH", &qt_library_path);
+        .define("CMAKE_PREFIX_PATH", &qt_library_path)
+        // wPlay (23 Nov 2026): MATIKAN -march=native bawaan UxPlay.
+        // lib/uxplay/lib/CMakeLists.txt secara default mengompilasi
+        // kode C (raop/playfair/llhttp/srp) dengan "-Ofast
+        // -march=native" — dioptimalkan untuk CPU MESIN BUILD, bukan
+        // mesin pemakai. Di GitHub Actions itu lotere: runner yang
+        // CPU-nya punya AVX-512 menghasilkan wplay.exe berisi
+        // instruksi AVX-512 (terbukti dari bedah exe crash user:
+        // vmovdqu64 %zmm di raop_init, offset 0x1ff895, exception
+        // 0xc000001d di i3-12100F yang tidak punya AVX-512 — penyakit
+        // yang sama persis dengan crash resmi iDescriptor v0.6.2).
+        // NO_MARCH_NATIVE adalah saklar resmi dari UxPlay sendiri;
+        // kode C-nya turun ke -O2 baseline x86-64 yang aman di semua
+        // CPU 64-bit modern.
+        .define("NO_MARCH_NATIVE", "ON");
     let out = cmake_config.build();
 
     let build_dir = out.join("build");
@@ -272,15 +286,11 @@ fn main() {
             println!("cargo:rustc-link-lib={}", lib);
         }
 
-        // Ikon aplikasi (logo wPlay) untuk wplay.exe.
-        // DINONAKTIFKAN SEMENTARA (23 Nov 2026): build pertama yang
-        // memuat langkah tanam ikon ini crash saat startup di PC user
-        // dengan exception 0xc000001d (illegal instruction) di dalam
-        // wplay.exe sendiri. Langkah ini satu-satunya perubahan yang
-        // mengutak-atik binary exe secara langsung, jadi dinonaktifkan
-        // dulu untuk bisect — aktifkan lagi setelah terbukti bukan
-        // penyebabnya.
+        // Ikon aplikasi (logo wPlay) untuk wplay.exe. (Sempat
+        // dinonaktifkan saat bisect crash 0xc000001d 23 Nov 2026;
+        // bedah exe membuktikan biangnya -march=native UxPlay, bukan
+        // ikon ini — jadi diaktifkan kembali.)
         println!("cargo:rerun-if-changed=assets/icon_hex.txt");
-        // embed_windows_icon();
+        embed_windows_icon();
     }
 }

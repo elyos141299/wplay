@@ -8,15 +8,12 @@
 // AirplayImp dan pemuatan QML (filesystem saat debug, qrc saat rilis,
 // sama seperti pola upstream).
 
-// DIAGNOSIS BISECT (23 Nov 2026): atribut windows_subsystem
-// dimatikan lagi sementara. Build final (subsystem aktif + UI baru
-// + ikon) crash 0xc000001d saat startup di PC user; bisect ikon
-// sudah gugur (tetap crash tanpa ikon). Langkah ini mengembalikan
-// source PERSIS ke keadaan build yang terbukti jalan 22 Nov 10:58
-// (konsol diagnosis + Main.qml lama) untuk memisahkan "regresi
-// source" vs "perubahan lingkungan build". Kembalikan setelah
-// penyebab ketemu:
-// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Build rilis berjalan sebagai aplikasi GUI murni (tanpa jendela
+// konsol). Sempat bolak-balik dimatikan selama diagnosis Phase 3
+// dan bisect crash 0xc000001d (23 Nov 2026, biang terbukti:
+// -march=native UxPlay — lihat build.rs), lalu dikembalikan
+// permanen setelah akar masalahnya ketemu.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use qmetaobject::prelude::*;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
