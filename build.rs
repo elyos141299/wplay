@@ -273,7 +273,14 @@ fn main() {
         }
 
         // Ikon aplikasi (logo wPlay) untuk wplay.exe.
+        // DINONAKTIFKAN SEMENTARA (23 Nov 2026): build pertama yang
+        // memuat langkah tanam ikon ini crash saat startup di PC user
+        // dengan exception 0xc000001d (illegal instruction) di dalam
+        // wplay.exe sendiri. Langkah ini satu-satunya perubahan yang
+        // mengutak-atik binary exe secara langsung, jadi dinonaktifkan
+        // dulu untuk bisect — aktifkan lagi setelah terbukti bukan
+        // penyebabnya.
         println!("cargo:rerun-if-changed=assets/icon_hex.txt");
-        embed_windows_icon();
+        // embed_windows_icon();
     }
 }
