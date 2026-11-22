@@ -198,5 +198,18 @@ fn main() {
             "cargo:rustc-link-arg={}",
             bonjour_sdk.join("Lib/x64/dnssd.lib").display()
         );
+
+        // wPlay (Phase 3, run #6): library sistem Windows yang
+        // dibutuhkan kode UxPlay tapi tidak pernah dideklarasikan
+        // untuk linker Rust (CMake-nya UxPlay menyebut iphlpapi +
+        // ws2_32 untuk target airplay-nya sendiri, tapi daftar itu
+        // tidak diteruskan ke link final via cargo):
+        // - advapi32: CryptAcquireContext/CryptGenRandom/
+        //   CryptReleaseContext di lib/uxplay/lib/srp.c
+        // - iphlpapi: GetAdaptersAddresses di lib/uxplay/uxplay.cpp
+        // - ws2_32/wsock32: socket Winsock yang dipakai UxPlay
+        for lib in &["advapi32", "iphlpapi", "ws2_32", "wsock32"] {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
     }
 }

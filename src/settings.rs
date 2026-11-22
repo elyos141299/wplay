@@ -22,7 +22,7 @@ pub const AIRPLAY_FPS: u32 = 60;
 /// Susun argumen baris perintah untuk UxPlay, meniru
 /// settings_manager::airplay_uxplay_args() v0.6.1 dengan nilai bawaan.
 pub fn airplay_uxplay_args() -> Vec<String> {
-    let mut args = vec![
+    let args = vec![
         "uxplay".to_string(),
         "-n".to_string(),
         SERVER_NAME.to_string(),
