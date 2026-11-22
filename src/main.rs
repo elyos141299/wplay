@@ -58,6 +58,17 @@ fn main() {
         }
     }
 
+    // wPlay (Phase 3, tes perangkat pertama): muat plugin qml6glsink
+    // SEBELUM Main.qml dibaca engine. Tipe GstGLQt6VideoItem yang
+    // di-import Main.qml baru terdaftar ke QML saat plugin GStreamer
+    // itu dimuat (itu gunanya force_load_gst_gl di upstream, dan di
+    // sana urutannya memang begitu: load_gst_gl dipanggil dari
+    // Toolbox sebelum Airplay.qml dibuka). Versi pertama wPlay
+    // memanggilnya DARI DALAM QML setelah dokumen dimuat — mustahil
+    // berhasil: dokumennya gagal dimuat total, aplikasi jalan terus
+    // di latar belakang tanpa jendela sama sekali.
+    let _ = crate::gst_gl::force_load_gst_gl();
+
     let mut engine = QmlEngine::new();
 
     let airplay = QObjectBox::new(airplay::Airplay::default());
