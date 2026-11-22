@@ -16,6 +16,7 @@ on:
 env:
   QT_VERSION: "6.9.3"
   GST_PLUGINS_GOOD_VERSION: "1.26.2"
+  GST_LIBAV_VERSION: "1.26.2"
   LIBPLIST_VER: "2.7.0"
 
 jobs:
@@ -135,6 +136,27 @@ jobs:
           ninja -C build-qml6
           cp build-qml6/ext/qt6/libgstqml6.dll /mingw64/lib/gstreamer-1.0/
 
+      # Phase 3 (temuan dari build+tes Linux di sandbox): UxPlay saat
+      # start MEMERIKSA plugin gst-libav — "Required gstreamer libav
+      # plugin feature 'avdec_aac' not found" (dan avdec_alac) untuk
+      # decode audio AirPlay. Paket pacman gst-libav sudah tidak ada
+      # di mingw64, jadi plugin ini dibangun dari source resmi
+      # GStreamer, meniru langkah qml6glsink di atas.
+      - name: Build gst-libav from source
+        run: |
+          curl --retry 3 --retry-delay 5 -L \
+            -o "gst-libav-${GST_LIBAV_VERSION}.tar.xz" \
+            "https://gstreamer.freedesktop.org/src/gst-libav/gst-libav-${GST_LIBAV_VERSION}.tar.xz"
+          tar -xf "gst-libav-${GST_LIBAV_VERSION}.tar.xz"
+          cd "gst-libav-${GST_LIBAV_VERSION}"
+
+          meson setup build-libav . \
+            --prefix=/mingw64 \
+            --libdir=lib
+
+          ninja -C build-libav
+          cp build-libav/ext/libav/libgstlibav.dll /mingw64/lib/gstreamer-1.0/
+
       - name: Download and Extract Bonjour SDK
         run: |
           curl --retry 3 --retry-delay 5 -L \
@@ -246,7 +268,7 @@ jobs:
 
           "$qt_bin/windeployqt6.exe" --qmldir src/ui --dir dist --plugindir dist/plugins dist/wplay.exe
 
-          PLUGINS="libgstcoreelements libgstapp libgstqml6 libgstopengl libgstvideoconvert libgstvideoconvertscale libgstplayback libgsttypefindfunctions libgstaudioconvert libgstaudioresample libgstvolume libgstgio libgstvideorate libgstoverlaycomposition"
+          PLUGINS="libgstcoreelements libgstapp libgstqml6 libgstlibav libgstopengl libgstvideoconvert libgstvideoconvertscale libgstplayback libgsttypefindfunctions libgstaudioconvert libgstaudioresample libgstvolume libgstgio libgstvideorate libgstoverlaycomposition"
           for p in $PLUGINS; do
             f=$(ls /mingw64/lib/gstreamer-1.0/${p}*.dll 2>/dev/null | head -n1 || true)
             if [ -n "$f" ]; then
