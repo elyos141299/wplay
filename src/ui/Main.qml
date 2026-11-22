@@ -22,11 +22,11 @@
 //   diubah ukurannya dari tepi (startSystemResize). Logika koneksi
 //   TIDAK berubah.
 // - 23 Nov 2026 (feedback user dari tes frameless): tombol Rotate
-//   DIHAPUS; bug slider Volume tidak bisa digeser diperbaiki (area
-//   drag jendela dipersempit ke ruang kosong title bar saja); dan
-//   jendela kini otomatis menyesuaikan ukuran dengan rasio video
-//   mirror (fitWindowToVideo) supaya tidak ada ruang hitam berlebih
-//   di home screen portrait maupun game landscape.
+//   DIHAPUS; area drag jendela dipersempit ke ruang kosong title
+//   bar saja. Fitur ukuran jendela mengikuti rasio mirror sempat
+//   ditambahkan lalu DIBATALKAN user di hari yang sama. Kontrol
+//   Volume juga akhirnya DIHAPUS atas permintaan user (masih
+//   bermasalah) — title bar kini hanya berisi nama perangkat.
 
 import QtQuick
 import QtQuick.Controls
@@ -39,7 +39,7 @@ ApplicationWindow {
 
     width: 900
     height: 644
-    minimumWidth: 320
+    minimumWidth: 640
     minimumHeight: 480
     visible: true
     title: qsTr("wPlay")
@@ -59,43 +59,10 @@ ApplicationWindow {
     property string clientModel: ""
     property string parsedModel: ""
 
-    function setMasterVolume(volume) {
-        AirplayImp.set_master_volume(Math.max(0, Math.min(100, volume)) / 100)
-    }
-
-    // Samakan ukuran jendela dengan rasio video mirror (permintaan
-    // user 23 Nov 2026: tidak ada ruang hitam berlebih). Ukuran asli
-    // stream dibaca dari implicitWidth/Height GstGLQt6VideoItem —
-    // diisi dari caps video oleh plugin qml6glsink sendiri. Tinggi
-    // jendela dipertahankan; lebar mengikuti rasio. Kalau lebar
-    // yang dibutuhkan melebihi layar, giliran tinggi yang menyesuaikan.
-    // Hanya berjalan saat tersambung dan jendela tidak maximized.
-    function fitWindowToVideo() {
-        if (!root.clientConnected)
-            return
-        if (root.visibility === Window.Maximized || root.visibility === Window.FullScreen)
-            return
-        const iw = video.implicitWidth
-        const ih = video.implicitHeight
-        if (iw <= 0 || ih <= 0)
-            return
-        const aspect = iw / ih
-        const barH = 44
-        const maxW = Screen.width * 0.96
-        const maxH = Screen.height * 0.94
-        let contentH = root.height - barH
-        let contentW = Math.round(contentH * aspect)
-        if (contentW > maxW) {
-            contentW = Math.round(maxW)
-            contentH = Math.round(contentW / aspect)
-        }
-        if (barH + contentH > maxH) {
-            contentH = Math.round(maxH) - barH
-            contentW = Math.round(contentH * aspect)
-        }
-        root.width = Math.max(root.minimumWidth, contentW)
-        root.height = Math.max(root.minimumHeight, barH + contentH)
-    }
+    // CATATAN: fitur ukuran jendela mengikuti rasio mirror pernah
+    // dicoba 23 Nov 2026 lalu DIBATALKAN user di hari yang sama
+    // ("balikan ke awal... tidak usah mengikuti mirror") — jendela
+    // berukuran tetap seperti semula, user mengatur sendiri.
 
     function toggleMaximized() {
         if (root.visibility === Window.Maximized)
@@ -151,16 +118,7 @@ ApplicationWindow {
         onTriggered: root.startAirPlay()
     }
 
-    // Debounce untuk fitWindowToVideo: implicitWidth dan
-    // implicitHeight berubah bergantian saat caps stream berganti
-    // (mis. iPhone diputar portrait<->landscape) — tunggu keduanya
-    // stabil dulu sebelum mengubah ukuran jendela.
-    Timer {
-        id: fitTimer
-        interval: 200
-        repeat: false
-        onTriggered: root.fitWindowToVideo()
-    }
+
 
     ColumnLayout {
         anchors.fill: parent
@@ -183,11 +141,10 @@ ApplicationWindow {
                 color: root.panelBorder
             }
 
-            // CATATAN: area drag jendela TIDAK lagi menutupi seluruh
-            // title bar. MouseArea sepenuh bar merebut drag dari
-            // slider Volume (bug dilaporkan user 23 Nov 2026: slider
-            // tidak bisa digeser sama sekali). Sekarang area drag
-            // hanya tinggal di ruang kosong (spacer) — lihat di bawah.
+            // CATATAN: area drag jendela hanya tinggal di ruang
+            // kosong (spacer) title bar — lihat di bawah — bukan
+            // menutupi seluruh bar, supaya tidak merebut interaksi
+            // dari kontrol apa pun di bar ini.
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10
@@ -263,50 +220,6 @@ ApplicationWindow {
                     color: "white"
                     font.pixelSize: 13
                     visible: root.clientConnected
-                }
-
-                Label {
-                    text: qsTr("Volume")
-                    color: "white"
-                    font.pixelSize: 12
-                    visible: root.clientConnected
-                }
-
-                Slider {
-                    id: volumeSlider
-                    Layout.preferredWidth: 110
-                    visible: root.clientConnected
-                    from: 0
-                    to: 100
-                    value: 100
-                    stepSize: 1
-                    onMoved: root.setMasterVolume(value)
-
-                    background: Rectangle {
-                        x: volumeSlider.leftPadding
-                        y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                        width: volumeSlider.availableWidth
-                        height: 4
-                        radius: 2
-                        color: "#2a3c55"
-
-                        Rectangle {
-                            width: volumeSlider.visualPosition * parent.width
-                            height: parent.height
-                            radius: 2
-                            color: root.accent
-                        }
-                    }
-                    handle: Rectangle {
-                        x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
-                        y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                        width: 14
-                        height: 14
-                        radius: 7
-                        color: volumeSlider.pressed ? "#dbe9f7" : "white"
-                        border.color: root.accent
-                        border.width: 2
-                    }
                 }
 
                 // Ruang kosong = area drag jendela (satu-satunya).
@@ -396,9 +309,6 @@ ApplicationWindow {
                 id: video
                 anchors.fill: parent
                 objectName: "videoItem"
-
-                onImplicitWidthChanged: fitTimer.restart()
-                onImplicitHeightChanged: fitTimer.restart()
             }
 
             // Latar legam di belakang layar tunggu: menutupi frame
