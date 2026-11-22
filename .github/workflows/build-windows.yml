@@ -1,0 +1,219 @@
+name: Build Windows (wPlay)
+
+# DRAF Phase 2 — belum pernah dijalankan. File ini meniru
+# .github/workflows/build-windows.yml milik iDescriptor v0.6.1,
+# dipotong untuk wPlay: tanpa FluentUI, tanpa WinFsp, tanpa libheif,
+# tanpa penandatanganan kode, tanpa MSI/MSIX (itu urusan Phase 3+).
+# Hasilnya cuma file wplay.exe mentah sebagai artifact.
+#
+# Cara pakai nanti: taruh folder app/ ini sebagai repo GitHub
+# (privat dulu tidak apa-apa), lalu jalankan workflow ini manual
+# lewat tab Actions -> "Build Windows (wPlay)" -> Run workflow.
+
+on:
+  workflow_dispatch:
+
+env:
+  QT_VERSION: "6.9.3"
+  GST_PLUGINS_GOOD_VERSION: "1.26.2"
+  LIBPLIST_VER: "2.7.0"
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          release: false
+          update: false
+
+      # CATATAN Phase 3: langkah "Use msys2 archive" milik upstream
+      # SENGAJA dibuang — script util/get-msys2-archive.ps1 tidak ada
+      # di repo wPlay dan langkah itu pasti gagal. Fungsinya cuma
+      # mengunci versi arsip MSYS2, tidak wajib untuk build.
+
+      - name: Install deps using pacman
+        run: |
+          pacman -S --needed --noconfirm \
+          coreutils \
+          base-devel \
+          git \
+          make \
+          libtool \
+          autoconf \
+          automake-wrapper \
+          p7zip \
+          mingw-w64-x86_64-gcc \
+          mingw-w64-x86_64-cmake \
+          mingw-w64-x86_64-meson \
+          mingw-w64-x86_64-ninja \
+          mingw-w64-x86_64-pkgconf \
+          mingw-w64-x86_64-curl \
+          mingw-w64-x86_64-openssl \
+          mingw-w64-x86_64-libzip \
+          mingw-w64-x86_64-gstreamer \
+          mingw-w64-x86_64-gst-plugins-base \
+          mingw-w64-x86_64-gst-plugins-good \
+          mingw-w64-x86_64-gst-plugins-bad \
+          mingw-w64-x86_64-gst-plugins-ugly \
+          mingw-w64-x86_64-gst-libav \
+          mingw-w64-x86_64-libarchive \
+          mingw-w64-x86_64-rustup \
+          mingw-w64-x86_64-clang
+
+      - name: Setup rust toolchain
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu
+          rustup default stable-x86_64-pc-windows-gnu
+          rustup toolchain list
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: ${{ env.QT_VERSION }}
+          # iDescriptor memasang banyak modul tambahan (multimedia,
+          # location, serialport, 5compat, ...). wPlay cuma butuh
+          # modul bawaan Qt Quick/Controls2, jadi daftarnya kosong.
+          arch: win64_mingw
+
+      - name: Set Environment Variables
+        run: |
+          qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
+          echo "QMAKE=${qt_root_dir}/bin/qmake.exe" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
+
+      - name: Build qml6glsink from gst-plugins-good
+        run: |
+          qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
+
+          curl --retry 3 --retry-delay 5 -L \
+            -o "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz" \
+            "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
+          tar -xf "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}.tar.xz"
+          cd "gst-plugins-good-${GST_PLUGINS_GOOD_VERSION}"
+
+          meson setup build-qml6 . \
+            --prefix=/mingw64 \
+            --libdir=lib \
+            --auto-features=disabled \
+            -Dqt-method=qmake \
+            -Dqt6=enabled \
+            -Dqt5=disabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
+
+          ninja -C build-qml6
+          cp build-qml6/ext/qt6/libgstqml6.dll /mingw64/lib/gstreamer-1.0/
+
+      - name: Download and Extract Bonjour SDK
+        run: |
+          curl --retry 3 --retry-delay 5 -L \
+            -o bonjour-sdk.exe \
+            "https://github.com/tempx-x/bonjour-sdk/raw/refs/heads/main/bonjoursdksetup.exe"
+
+          EXPECTED_HASH="4ff2aae8205aec31b06743782cfcadce"
+          ACTUAL_HASH=$(md5sum bonjour-sdk.exe | awk '{print $1}')
+
+          echo "Expected MD5: $EXPECTED_HASH"
+          echo "Actual MD5:   $ACTUAL_HASH"
+
+          if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+            echo "::error::Checksum mismatch!"
+            exit 1
+          fi
+
+          echo "Checksum verified. Extracting installer..."
+          7z x bonjour-sdk.exe -oBonjourInstaller
+
+      - name: Install Bonjour Runtime
+        shell: powershell
+        run: |
+          $currentPath = Get-Location
+          $msiFilePath = Join-Path -Path $currentPath -ChildPath "BonjourInstaller\Bonjour64.msi"
+          $msiexecArguments = "/i `"$msiFilePath`" /qn"
+          Write-Host "Installing Bonjour Runtime..."
+          Start-Process msiexec -ArgumentList $msiexecArguments -NoNewWindow -Wait
+
+      - name: Install Bonjour SDK
+        shell: powershell
+        run: |
+          $currentPath = Get-Location
+          $msiFilePath = Join-Path -Path $currentPath -ChildPath "BonjourInstaller\BonjourSDK64.msi"
+          $msiexecArguments = "/i `"$msiFilePath`" /qn"
+          Write-Host "Installing Bonjour SDK..."
+          Start-Process msiexec -ArgumentList $msiexecArguments -NoNewWindow -Wait
+
+          "BONJOUR_SDK=C:/Program Files/Bonjour SDK" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build libplist
+        run: |
+          workspace="$PWD"
+          tmp="$PWD/_tmp_libs"
+          mkdir -p "$tmp"
+          cd "$tmp"
+
+          base_url="https://github.com/libimobiledevice"
+
+          libs=( "libplist" )
+
+          for name in "${libs[@]}"; do
+            ver_var=$(echo "${name^^}_VER" | sed 's/-/_/g')
+            ver="${!ver_var:-}"
+            if [ -z "$ver" ]; then
+              echo "Version for $name not set (env var $ver_var)"
+              exit 1
+            fi
+
+            archive="${name}-${ver}.tar.bz2"
+            url="${base_url}/${name}/releases/download/${ver}/${archive}"
+            echo "=== Processing $name $ver ==="
+            echo "URL: $url"
+            curl --retry 3 --retry-delay 5 -L -o "$archive" "$url"
+
+            echo "Extracting $archive"
+            tar xjf "$archive"
+
+            srcdir="${name}-${ver}"
+            pushd "$srcdir"
+
+            ./configure --without-cython
+            make -j"$(nproc)"
+            make install
+            popd
+            echo "Installed $name $ver"
+          done
+
+          cd "$workspace"
+          rm -rf "$tmp"
+
+      - name: Fetch UxPlay (in case submodules were not checked out)
+        run: |
+          bash scripts/fetch-uxplay.sh
+
+      - name: Build
+        run: |
+          RUSTFLAGS="" cargo build --release
+
+      - name: Upload wplay.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wplay-windows-x86_64
+          path: target/release/wplay.exe
+          if-no-files-found: error
+        # CATATAN Phase 3: .exe mentah ini belum tentu jalan di PC lain
+        # karena DLL Qt/GStreamer belum dibundel. Langkah deploy
+        # (windeployqt + menyalin DLL & plugin GStreamer, meniru
+        # packaging/windows/portable/deploy.sh upstream) ditambahkan
+        # setelah build pertama terbukti lolos.
