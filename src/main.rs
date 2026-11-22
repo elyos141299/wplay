@@ -8,7 +8,12 @@
 // AirplayImp dan pemuatan QML (filesystem saat debug, qrc saat rilis,
 // sama seperti pola upstream).
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// DIAGNOSIS SEMENTARA (Phase 3): atribut windows_subsystem dimatikan
+// supaya build rilis berjalan sebagai aplikasi konsol dan semua log
+// (termasuk pesan fatal GLib/GStreamer sebelum crash 0x40000015 di
+// libglib-2.0-0.dll) tercetak ke jendela cmd. KEMBALIKAN baris di
+// bawah ini setelah penyebab crash ketemu:
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use qmetaobject::prelude::*;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
