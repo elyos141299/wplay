@@ -16,7 +16,7 @@ on:
 env:
   QT_VERSION: "6.9.3"
   GST_PLUGINS_GOOD_VERSION: "1.26.2"
-  GST_LIBAV_VERSION: "1.26.2"
+  GST_LIBAV_VERSION: "1.28.9"
   LIBPLIST_VER: "2.7.0"
 
 jobs:
@@ -142,6 +142,10 @@ jobs:
       # decode audio AirPlay. Paket pacman gst-libav sudah tidak ada
       # di mingw64, jadi plugin ini dibangun dari source resmi
       # GStreamer, meniru langkah qml6glsink di atas.
+      # Versinya 1.28.9, BUKAN 1.26.2: percobaan pertama pakai 1.26.2
+      # gagal compile melawan FFmpeg 8 bawaan MSYS2 sekarang
+      # (AV_CODEC_ID_V308/V408/V410 sudah dihapus FFmpeg). 1.28.9
+      # sekeluarga dengan GStreamer 1.28.9 yang terpasang dari pacman.
       - name: Build gst-libav from source
         run: |
           curl --retry 3 --retry-delay 5 -L \
