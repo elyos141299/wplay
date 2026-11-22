@@ -9,6 +9,19 @@
 use cpp::*;
 use qmetaobject::prelude::*;
 
+// wPlay (Phase 3, run #5): blok include global ini di upstream
+// tinggal di src/utils.rs (satu blok cpp!{{}} untuk seluruh crate).
+// Pas dua fungsi ini dipindah ke file sendiri, bloknya tidak ikut —
+// akibatnya compiler tidak kenal gst_init/GstElement/QVariant sama
+// sekali ("was not declared in this scope"). Blok di bawah ini
+// mengembalikan include yang dibutuhkan dua fungsi di file ini.
+cpp! {{
+    #include <gst/gst.h>
+    #include <QVariant>
+    #include <QObject>
+    #include <QQuickItem>
+}}
+
 //FIXME: this may be called multiple times?
 pub fn force_load_gst_gl() -> bool {
     /*
