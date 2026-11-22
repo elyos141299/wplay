@@ -1,0 +1,7 @@
+[submodule "lib/uxplay"]
+	path = lib/uxplay
+	url = https://github.com/iDescriptor/uxplay.git
+	# Commit terkunci (sama dengan yang dipakai iDescriptor v0.6.1):
+	# eaca2458946d8a283df3b872f25c6b7cc98be411
+	# Catatan: entri ini aktif begitu folder app/ ini jadi repo git.
+	# Selama belum jadi repo, pakai scripts/fetch-uxplay.sh.

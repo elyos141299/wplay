@@ -1,0 +1,6 @@
+/target
+# Isi submodule UxPlay tidak ikut dicatat di repo wPlay selain sebagai
+# submodule (lihat .gitmodules); hasil unduhan manual fetch-uxplay.sh
+# diabaikan supaya tidak ter-commit sebagai salinan lepas.
+/lib/uxplay/*
+!/lib/uxplay/README.md
