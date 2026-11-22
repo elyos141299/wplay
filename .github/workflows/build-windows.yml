@@ -17,6 +17,7 @@ env:
   QT_VERSION: "6.9.3"
   GST_PLUGINS_GOOD_VERSION: "1.26.2"
   GST_LIBAV_VERSION: "1.28.9"
+  GST_PLUGINS_BAD_VERSION: "1.28.9"
   LIBPLIST_VER: "2.7.0"
 
 jobs:
@@ -82,6 +83,7 @@ jobs:
           mingw-w64-x86_64-libzip \
           mingw-w64-x86_64-gstreamer \
           mingw-w64-x86_64-gst-plugins-base \
+          mingw-w64-x86_64-libjpeg-turbo \
           mingw-w64-x86_64-ffmpeg \
           mingw-w64-x86_64-libarchive \
           mingw-w64-x86_64-rustup \
@@ -112,7 +114,19 @@ jobs:
           echo "QMAKE=${qt_root_dir}/bin/qmake.exe" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_EXECUTABLE=C:/msys64/mingw64/bin/pkg-config.exe" >> $GITHUB_ENV
 
-      - name: Build qml6glsink from gst-plugins-good
+      # Selain qml6glsink, dari gst-plugins-good juga dibangun plugin
+      # kecil yang dipakai pipeline UxPlay (daftar elemennya dibaca
+      # langsung dari source renderers UxPlay):
+      # - level: pipeline audio "... ! volume ! level ! autoaudiosink"
+      #   — ketiadaannya bikin app MATI TOTAL saat start dengan
+      #   g_error "gst_parse_launch error (audio 1): no element
+      #   \"level\"" -> abort 0x40000015 di libglib (kejadian di PC
+      #   user, 22 Nov 2026, tertangkap berkat build konsol diagnosis)
+      # - autodetect: elemen autoaudiosink (audiosink bawaan UxPlay)
+      # - directsound: keluaran audio Windows yang dipilih
+      #   autoaudiosink
+      # - jpeg + imagefreeze: pipeline video tipe JPEG
+      - name: Build gst-plugins-good parts (qml6glsink + plugin UxPlay)
         run: |
           qt_root_dir="$(cygpath -au "${Qt6_DIR:?Qt6_DIR is not set}")"
 
@@ -129,12 +143,22 @@ jobs:
             -Dqt-method=qmake \
             -Dqt6=enabled \
             -Dqt5=disabled \
+            -Dlevel=enabled \
+            -Dautodetect=enabled \
+            -Ddirectsound=enabled \
+            -Djpeg=enabled \
+            -Dimagefreeze=enabled \
             -Dtests=disabled \
             -Dexamples=disabled \
             -Dnls=disabled
 
           ninja -C build-qml6
           cp build-qml6/ext/qt6/libgstqml6.dll /mingw64/lib/gstreamer-1.0/
+          cp build-qml6/gst/level/libgstlevel.dll /mingw64/lib/gstreamer-1.0/
+          cp build-qml6/gst/autodetect/libgstautodetect.dll /mingw64/lib/gstreamer-1.0/
+          cp build-qml6/sys/directsound/libgstdirectsound.dll /mingw64/lib/gstreamer-1.0/
+          cp build-qml6/ext/jpeg/libgstjpeg.dll /mingw64/lib/gstreamer-1.0/
+          cp build-qml6/gst/imagefreeze/libgstimagefreeze.dll /mingw64/lib/gstreamer-1.0/
 
       # Phase 3 (temuan dari build+tes Linux di sandbox): UxPlay saat
       # start MEMERIKSA plugin gst-libav — "Required gstreamer libav
@@ -160,6 +184,34 @@ jobs:
 
           ninja -C build-libav
           cp build-libav/ext/libav/libgstlibav.dll /mingw64/lib/gstreamer-1.0/
+
+      # Dari gst-plugins-bad, pipeline video UxPlay memakai:
+      # - videoparsersbad: h264parse/h265parse (parser bawaan UxPlay)
+      # - wasapi: wasapisink, pilihan keluaran audio modern Windows
+      #   untuk autoaudiosink (upstream juga membundelnya)
+      # Versi 1.28.9 supaya sekeluarga dengan GStreamer/FFmpeg yang
+      # terpasang dari pacman.
+      - name: Build gst-plugins-bad parts (videoparsersbad + wasapi)
+        run: |
+          curl --retry 3 --retry-delay 5 -L \
+            -o "gst-plugins-bad-${GST_PLUGINS_BAD_VERSION}.tar.xz" \
+            "https://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad-${GST_PLUGINS_BAD_VERSION}.tar.xz"
+          tar -xf "gst-plugins-bad-${GST_PLUGINS_BAD_VERSION}.tar.xz"
+          cd "gst-plugins-bad-${GST_PLUGINS_BAD_VERSION}"
+
+          meson setup build-bad . \
+            --prefix=/mingw64 \
+            --libdir=lib \
+            --auto-features=disabled \
+            -Dvideoparsersbad=enabled \
+            -Dwasapi=enabled \
+            -Dtests=disabled \
+            -Dexamples=disabled \
+            -Dnls=disabled
+
+          ninja -C build-bad
+          cp build-bad/gst/videoparsers/libgstvideoparsersbad.dll /mingw64/lib/gstreamer-1.0/
+          cp build-bad/sys/wasapi/libgstwasapi.dll /mingw64/lib/gstreamer-1.0/
 
       - name: Download and Extract Bonjour SDK
         run: |
@@ -272,7 +324,7 @@ jobs:
 
           "$qt_bin/windeployqt6.exe" --qmldir src/ui --dir dist --plugindir dist/plugins dist/wplay.exe
 
-          PLUGINS="libgstcoreelements libgstapp libgstqml6 libgstlibav libgstopengl libgstvideoconvert libgstvideoconvertscale libgstplayback libgsttypefindfunctions libgstaudioconvert libgstaudioresample libgstvolume libgstgio libgstvideorate libgstoverlaycomposition"
+          PLUGINS="libgstcoreelements libgstapp libgstqml6 libgstlibav libgstlevel libgstautodetect libgstdirectsound libgstjpeg libgstimagefreeze libgstvideoparsersbad libgstwasapi libgstopengl libgstvideoconvert libgstvideoconvertscale libgstplayback libgsttypefindfunctions libgstaudioconvert libgstaudioresample libgstvolume libgstgio libgstvideorate libgstoverlaycomposition"
           for p in $PLUGINS; do
             f=$(ls /mingw64/lib/gstreamer-1.0/${p}*.dll 2>/dev/null | head -n1 || true)
             if [ -n "$f" ]; then
