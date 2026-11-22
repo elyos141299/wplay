@@ -214,6 +214,15 @@ jobs:
           ninja -C build-bad
           cp build-bad/gst/videoparsers/libgstvideoparsersbad.dll /mingw64/lib/gstreamer-1.0/
           cp build-bad/sys/wasapi/libgstwasapi.dll /mingw64/lib/gstreamer-1.0/
+          # libgstvideoparsersbad bergantung pada library pendamping
+          # libgstcodecparsers dari build yang sama. Library itu tidak
+          # ada di /mingw64/bin (gst-plugins-bad tidak dipasang via
+          # pacman), jadi tanpa baris ini plugin-nya GAGAL DIMUAT di
+          # PC user ("Failed to load plugin libgstvideoparsersbad.dll:
+          # The specified module could not be found" -> "no element
+          # h264parse" -> video renderer mati). Taruh di /mingw64/bin
+          # supaya langkah bundel (ldd) ikut menyalinnya ke dist/.
+          cp build-bad/gst-libs/gst/codecparsers/libgstcodecparsers-1.0-0.dll /mingw64/bin/
 
       - name: Download and Extract Bonjour SDK
         run: |
