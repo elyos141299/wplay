@@ -22,7 +22,14 @@ pub const AIRPLAY_FPS: u32 = 60;
 /// Susun argumen baris perintah untuk UxPlay, meniru
 /// settings_manager::airplay_uxplay_args() v0.6.1 dengan nilai bawaan.
 pub fn airplay_uxplay_args() -> Vec<String> {
-    let args = vec![
+    // Di Linux variabel ini ditambah "-p" lewat push (blok cfg di
+    // bawah), jadi harus `mut`; di OS lain push itu tidak ada dan
+    // compiler memprotes unused_mut — bungkam khusus non-Linux.
+    // (Bug Phase 3: membuang `mut` demi warning Windows membuat
+    // build Linux gagal total dengan E0596; ketahuan dari build
+    // Linux di sandbox.)
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+    let mut args = vec![
         "uxplay".to_string(),
         "-n".to_string(),
         SERVER_NAME.to_string(),
