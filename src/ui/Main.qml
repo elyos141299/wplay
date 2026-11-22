@@ -21,6 +21,12 @@
 //   Jendela digeser dengan drag title bar (startSystemMove) dan
 //   diubah ukurannya dari tepi (startSystemResize). Logika koneksi
 //   TIDAK berubah.
+// - 23 Nov 2026 (feedback user dari tes frameless): tombol Rotate
+//   DIHAPUS; bug slider Volume tidak bisa digeser diperbaiki (area
+//   drag jendela dipersempit ke ruang kosong title bar saja); dan
+//   jendela kini otomatis menyesuaikan ukuran dengan rasio video
+//   mirror (fitWindowToVideo) supaya tidak ada ruang hitam berlebih
+//   di home screen portrait maupun game landscape.
 
 import QtQuick
 import QtQuick.Controls
@@ -33,7 +39,7 @@ ApplicationWindow {
 
     width: 900
     height: 644
-    minimumWidth: 640
+    minimumWidth: 320
     minimumHeight: 480
     visible: true
     title: qsTr("wPlay")
@@ -52,10 +58,43 @@ ApplicationWindow {
     property string clientDeviceName: ""
     property string clientModel: ""
     property string parsedModel: ""
-    property int rotationTurns: 0
 
     function setMasterVolume(volume) {
         AirplayImp.set_master_volume(Math.max(0, Math.min(100, volume)) / 100)
+    }
+
+    // Samakan ukuran jendela dengan rasio video mirror (permintaan
+    // user 23 Nov 2026: tidak ada ruang hitam berlebih). Ukuran asli
+    // stream dibaca dari implicitWidth/Height GstGLQt6VideoItem —
+    // diisi dari caps video oleh plugin qml6glsink sendiri. Tinggi
+    // jendela dipertahankan; lebar mengikuti rasio. Kalau lebar
+    // yang dibutuhkan melebihi layar, giliran tinggi yang menyesuaikan.
+    // Hanya berjalan saat tersambung dan jendela tidak maximized.
+    function fitWindowToVideo() {
+        if (!root.clientConnected)
+            return
+        if (root.visibility === Window.Maximized || root.visibility === Window.FullScreen)
+            return
+        const iw = video.implicitWidth
+        const ih = video.implicitHeight
+        if (iw <= 0 || ih <= 0)
+            return
+        const aspect = iw / ih
+        const barH = 44
+        const maxW = Screen.width * 0.96
+        const maxH = Screen.height * 0.94
+        let contentH = root.height - barH
+        let contentW = Math.round(contentH * aspect)
+        if (contentW > maxW) {
+            contentW = Math.round(maxW)
+            contentH = Math.round(contentW / aspect)
+        }
+        if (barH + contentH > maxH) {
+            contentH = Math.round(maxH) - barH
+            contentW = Math.round(contentH * aspect)
+        }
+        root.width = Math.max(root.minimumWidth, contentW)
+        root.height = Math.max(root.minimumHeight, barH + contentH)
     }
 
     function toggleMaximized() {
@@ -94,7 +133,6 @@ ApplicationWindow {
                 root.clientDeviceName = ""
                 root.clientModel = ""
                 root.parsedModel = ""
-                root.rotationTurns = 0
                 statusLabel.text = qsTr("Waiting for device connection")
             }
         }
@@ -111,6 +149,17 @@ ApplicationWindow {
         interval: 450
         repeat: false
         onTriggered: root.startAirPlay()
+    }
+
+    // Debounce untuk fitWindowToVideo: implicitWidth dan
+    // implicitHeight berubah bergantian saat caps stream berganti
+    // (mis. iPhone diputar portrait<->landscape) — tunggu keduanya
+    // stabil dulu sebelum mengubah ukuran jendela.
+    Timer {
+        id: fitTimer
+        interval: 200
+        repeat: false
+        onTriggered: root.fitWindowToVideo()
     }
 
     ColumnLayout {
@@ -134,12 +183,11 @@ ApplicationWindow {
                 color: root.panelBorder
             }
 
-            MouseArea {
-                anchors.fill: parent
-                onPressed: root.startSystemMove()
-                onDoubleClicked: root.toggleMaximized()
-            }
-
+            // CATATAN: area drag jendela TIDAK lagi menutupi seluruh
+            // title bar. MouseArea sepenuh bar merebut drag dari
+            // slider Volume (bug dilaporkan user 23 Nov 2026: slider
+            // tidak bisa digeser sama sekali). Sekarang area drag
+            // hanya tinggal di ruang kosong (spacer) — lihat di bawah.
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10
@@ -217,31 +265,6 @@ ApplicationWindow {
                     visible: root.clientConnected
                 }
 
-                Button {
-                    id: rotateBtn
-                    text: qsTr("Rotate")
-                    visible: root.clientConnected
-                    onClicked: root.rotationTurns += 1
-
-                    contentItem: Text {
-                        text: rotateBtn.text
-                        color: "white"
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        leftPadding: 10
-                        rightPadding: 10
-                        topPadding: 4
-                        bottomPadding: 4
-                    }
-                    background: Rectangle {
-                        radius: 7
-                        color: rotateBtn.down ? "#33517a" : (rotateBtn.hovered ? "#2a4568" : "#1d3049")
-                        border.color: "#33506f"
-                        border.width: 1
-                    }
-                }
-
                 Label {
                     text: qsTr("Volume")
                     color: "white"
@@ -286,7 +309,17 @@ ApplicationWindow {
                     }
                 }
 
-                Item { Layout.fillWidth: true }
+                // Ruang kosong = area drag jendela (satu-satunya).
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onPressed: root.startSystemMove()
+                        onDoubleClicked: root.toggleMaximized()
+                    }
+                }
 
                 // Tombol jendela custom
                 Button {
@@ -363,8 +396,9 @@ ApplicationWindow {
                 id: video
                 anchors.fill: parent
                 objectName: "videoItem"
-                transformOrigin: Item.Center
-                rotation: root.rotationTurns * 90
+
+                onImplicitWidthChanged: fitTimer.restart()
+                onImplicitHeightChanged: fitTimer.restart()
             }
 
             // Latar legam di belakang layar tunggu: menutupi frame
