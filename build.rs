@@ -12,6 +12,66 @@
 use std::env;
 use std::path::PathBuf;
 
+// Byte ikon aplikasi disimpan di repo sebagai teks hex
+// (assets/icon_hex.txt) — file .ico biner tidak bisa ikut ter-push,
+// jadi build.rs mendekode hex ini lalu menanamnya ke wplay.exe.
+fn load_icon_bytes() -> Vec<u8> {
+    let hex_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+        .join("assets/icon_hex.txt");
+    let hex = std::fs::read_to_string(&hex_path).unwrap_or_default();
+    let digits: Vec<u8> = hex.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    digits
+        .chunks(2)
+        .filter_map(|pair| {
+            let s = std::str::from_utf8(pair).ok()?;
+            u8::from_str_radix(s, 16).ok()
+        })
+        .collect()
+}
+
+// Tanam ikon ke executable Windows lewat windres (resource .rc).
+// Best-effort: kegagalan di sini TIDAK boleh menggagalkan build —
+// aplikasi tetap jalan, hanya ikonnya kembali generik.
+fn embed_windows_icon() {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let ico_path = out_dir.join("wplay.ico");
+    let rc_path = out_dir.join("wplay.rc");
+    let obj_path = out_dir.join("wplay_icon.o");
+
+    let icon_bytes = load_icon_bytes();
+    if icon_bytes.is_empty() {
+        println!("cargo:warning=wPlay: assets/icon_hex.txt kosong/tidak terbaca, ikon dilewati");
+        return;
+    }
+    if std::fs::write(&ico_path, &icon_bytes).is_err() {
+        println!("cargo:warning=wPlay: gagal menulis wplay.ico, ikon dilewati");
+        return;
+    }
+    let rc_text = format!(
+        "1 ICON \"{}\"\n",
+        ico_path.display().to_string().replace('\\', "/")
+    );
+    if std::fs::write(&rc_path, rc_text).is_err() {
+        println!("cargo:warning=wPlay: gagal menulis wplay.rc, ikon dilewati");
+        return;
+    }
+    for tool in ["windres", "x86_64-w64-mingw32-windres"] {
+        let ok = std::process::Command::new(tool)
+            .args(["--input-format=rc", "--output-format=coff"])
+            .arg(&rc_path)
+            .arg("-o")
+            .arg(&obj_path)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok {
+            println!("cargo:rustc-link-arg={}", obj_path.display());
+            return;
+        }
+    }
+    println!("cargo:warning=wPlay: windres tidak tersedia/gagal, ikon aplikasi tidak ditanam");
+}
+
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
 
@@ -211,5 +271,9 @@ fn main() {
         for lib in &["advapi32", "iphlpapi", "ws2_32", "wsock32"] {
             println!("cargo:rustc-link-lib={}", lib);
         }
+
+        // Ikon aplikasi (logo wPlay) untuk wplay.exe.
+        println!("cargo:rerun-if-changed=assets/icon_hex.txt");
+        embed_windows_icon();
     }
 }
