@@ -91,6 +91,10 @@ jobs:
           # iDescriptor memasang banyak modul tambahan (multimedia,
           # location, serialport, 5compat, ...). wPlay cuma butuh
           # modul bawaan Qt Quick/Controls2, jadi daftarnya kosong.
+          # REVISI Phase 3 (run #3): tambah qtshadertools — tanpa ini
+          # program `qsb` tidak ada dan langkah build qml6glsink mati
+          # dengan "Program 'qsb-qt6 qsb' not found or not executable".
+          modules: qtshadertools
           arch: win64_mingw
 
       - name: Set Environment Variables
