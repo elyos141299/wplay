@@ -106,6 +106,16 @@ ApplicationWindow {
         rotation: root.rotationTurns * 90
     }
 
+    // Latar legam di belakang layar tunggu: menutupi frame video
+    // terakhir yang tertinggal di GstGLQt6VideoItem setelah koneksi
+    // diputus (tanpa ini, layar tunggu menimpa sisa gambar iPhone
+    // seperti hantu — terlihat di tes user 23 Nov 2026).
+    Rectangle {
+        anchors.fill: parent
+        color: root.color
+        visible: !root.clientConnected
+    }
+
     // Layar tunggu, tampil selama belum ada iPhone yang tersambung.
     ColumnLayout {
         anchors.centerIn: parent
