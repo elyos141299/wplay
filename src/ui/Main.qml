@@ -27,6 +27,10 @@
 //   ditambahkan lalu DIBATALKAN user di hari yang sama. Kontrol
 //   Volume juga akhirnya DIHAPUS atas permintaan user (masih
 //   bermasalah) — title bar kini hanya berisi nama perangkat.
+// - 23 Nov 2026 (permintaan user): layar tunggu DIHIDUPKAN —
+//   cincin sinyal memancar dari logo (sonar kalem), logo bernapas
+//   halus, titik-titik tunggu berjalan, fade-in saat layar tampil.
+//   Tema navy/steel tetap; logika koneksi & ukuran jendela tetap.
 
 import QtQuick
 import QtQuick.Controls
@@ -321,16 +325,74 @@ ApplicationWindow {
 
             // Layar tunggu, tampil selama belum ada iPhone tersambung.
             ColumnLayout {
+                id: waitingColumn
                 anchors.centerIn: parent
                 spacing: 14
                 visible: !root.clientConnected
+                opacity: 0
 
-                // Logo wPlay besar
-                Rectangle {
+                NumberAnimation {
+                    id: entranceAnim
+                    target: waitingColumn
+                    property: "opacity"
+                    from: 0
+                    to: 1
+                    duration: 650
+                    easing.type: Easing.OutCubic
+                }
+
+                onVisibleChanged: if (visible) entranceAnim.start()
+                Component.onCompleted: if (visible) entranceAnim.start()
+
+                // Logo wPlay besar + cincin sinyal beranimasi
+                Item {
                     Layout.alignment: Qt.AlignHCenter
                     width: 104
                     height: 104
-                    radius: 26
+
+                    // Cincin sonar: memancar dari logo lalu memudar,
+                    // bergantian — kesan "sedang mencari sinyal".
+                    Repeater {
+                        model: 3
+
+                        Rectangle {
+                            id: ring
+                            anchors.centerIn: parent
+                            width: 108
+                            height: 108
+                            radius: width / 2
+                            color: "transparent"
+                            border.color: root.accent
+                            border.width: 1.5
+                            opacity: 0
+
+                            SequentialAnimation {
+                                running: !root.clientConnected
+                                loops: Animation.Infinite
+
+                                PauseAnimation { duration: index * 900 }
+                                ParallelAnimation {
+                                    NumberAnimation { target: ring; property: "scale"; from: 0.72; to: 1.8; duration: 2700; easing.type: Easing.OutCubic }
+                                    NumberAnimation { target: ring; property: "opacity"; from: 0.45; to: 0; duration: 2700; easing.type: Easing.OutCubic }
+                                }
+                                PauseAnimation { duration: (2 - index) * 900 }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 104
+                        height: 104
+                        radius: 26
+
+                        // Napas halus logo.
+                        SequentialAnimation on scale {
+                            running: !root.clientConnected
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 1.0; to: 1.045; duration: 2100; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 1.045; to: 1.0; duration: 2100; easing.type: Easing.InOutSine }
+                        }
                     border.color: "#2c4a6b"
                     border.width: 1
                     gradient: Gradient {
@@ -364,6 +426,7 @@ ApplicationWindow {
                             ctx.closePath()
                             ctx.fill()
                         }
+                    }
                     }
                 }
 
@@ -400,6 +463,21 @@ ApplicationWindow {
                         text: qsTr("Starting AirPlay Server...")
                         color: "white"
                         font.pixelSize: 15
+                    }
+
+                    Label {
+                        id: waitDots
+                        text: ""
+                        color: root.textDim
+                        font.pixelSize: 15
+                        visible: root.serverRunning && !root.clientConnected
+
+                        Timer {
+                            interval: 450
+                            repeat: true
+                            running: waitDots.visible
+                            onTriggered: waitDots.text = waitDots.text.length >= 3 ? "" : waitDots.text + "."
+                        }
                     }
                 }
 
