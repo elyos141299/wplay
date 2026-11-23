@@ -31,11 +31,21 @@
 //   cincin sinyal memancar dari logo (sonar kalem), logo bernapas
 //   halus, titik-titik tunggu berjalan, fade-in saat layar tampil.
 //   Tema navy/steel tetap; logika koneksi & ukuran jendela tetap.
+// - 23 Nov 2026 (permintaan user): POP-UP DONASI SociaBuzz —
+//   kartu modal tampil satu kali pada peluncuran pertama
+//   (persistensi Settings), berisi NOTE + ajakan traktir kopi +
+//   kode QR, plus tombol hati permanen di title bar untuk
+//   membukanya lagi kapan pun. Teks Indonesia di kartu ini
+//   dikunci user persis seperti tertulis (tanpa qsTr). Kode QR
+//   digambar via Canvas dari data modul gambar aslinya — pola
+//   yang sama dengan logo (aplikasi tidak punya aset gambar;
+//   semua grafis digambar Canvas).
 
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import QtCore
 import org.freedesktop.gstreamer.Qt6GLVideoItem
 
 ApplicationWindow {
@@ -62,6 +72,25 @@ ApplicationWindow {
     property string clientDeviceName: ""
     property string clientModel: ""
     property string parsedModel: ""
+
+    // Tautan donasi SociaBuzz (pop-up donasi + tombol hati).
+    readonly property string donationUrl: "https://sociabuzz.com/oroboo/tribe"
+
+    // Persistensi pop-up donasi (QtCore Settings -> QSettings):
+    // donationSeen    = pop-up sudah diselesaikan user (klik donasi,
+    //                   atau tutup dengan centang aktif).
+    // donationRemind  = pop-up boleh tampil otomatis sekali lagi
+    //                   pada peluncuran berikutnya (user melepas
+    //                   centang "Jangan tampilkan lagi").
+    Settings {
+        id: appSettings
+        property bool donationSeen: false
+        property bool donationRemind: true
+    }
+
+    function openDonationPopup() {
+        donationOverlay.openPopup()
+    }
 
     // CATATAN: fitur ukuran jendela mengikuti rasio mirror pernah
     // dicoba 23 Nov 2026 lalu DIBATALKAN user di hari yang sama
@@ -91,7 +120,10 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: initTimer.start()
+    Component.onCompleted: {
+        initTimer.start()
+        donationTimer.start()
+    }
 
     onClosing: AirplayImp.cleanup()
 
@@ -120,6 +152,18 @@ ApplicationWindow {
         interval: 450
         repeat: false
         onTriggered: root.startAirPlay()
+    }
+
+    // Pop-up donasi tampil otomatis hanya pada peluncuran pertama
+    // (atau sekali lagi bila user melepas centang terakhir kali).
+    Timer {
+        id: donationTimer
+        interval: 1200
+        repeat: false
+        onTriggered: {
+            if (!appSettings.donationSeen && appSettings.donationRemind)
+                root.openDonationPopup()
+        }
     }
 
 
@@ -235,6 +279,31 @@ ApplicationWindow {
                         anchors.fill: parent
                         onPressed: root.startSystemMove()
                         onDoubleClicked: root.toggleMaximized()
+                    }
+                }
+
+                // Tombol donasi permanen: membuka lagi kartu donasi.
+                Button {
+                    id: donateBtn
+                    text: "❤"
+                    onClicked: root.openDonationPopup()
+
+                    ToolTip.visible: donateBtn.hovered
+                    ToolTip.text: "Dukung wPlay"
+                    ToolTip.delay: 600
+
+                    contentItem: Text {
+                        text: donateBtn.text
+                        color: "#e08a76"
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        implicitWidth: 42
+                        implicitHeight: 30
+                        radius: 6
+                        color: donateBtn.hovered ? "#22344d" : "transparent"
                     }
                 }
 
@@ -601,5 +670,381 @@ ApplicationWindow {
         height: 6
         cursorShape: Qt.SizeBDiagCursor
         onPressed: root.startSystemResize(Qt.RightEdge | Qt.TopEdge)
+    }
+
+    // ---------------------------------------------------------------
+    // Pop-up donasi SociaBuzz: overlay modal di atas seluruh jendela
+    // (termasuk title bar). Tampil otomatis satu kali pada
+    // peluncuran pertama; sesudah itu hanya dibuka manual lewat
+    // tombol hati di title bar. Klik pada latar TIDAK menutup
+    // kartu — hanya tombol di dalam kartu yang menutupnya.
+    // ---------------------------------------------------------------
+    Item {
+        id: donationOverlay
+        anchors.fill: parent
+        visible: opacity > 0
+        opacity: shown ? 1 : 0
+
+        property bool shown: false
+
+        Behavior on opacity {
+            NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+        }
+
+        function openPopup() {
+            // Centang selalu mulai aktif: bawaan = jangan tampil lagi.
+            dontShowCheck.checked = true
+            shown = true
+        }
+
+        function finishWithDonation() {
+            appSettings.donationSeen = true
+            appSettings.donationRemind = false
+            Qt.openUrlExternally(root.donationUrl)
+            shown = false
+        }
+
+        function finishLater() {
+            if (dontShowCheck.checked) {
+                appSettings.donationSeen = true
+                appSettings.donationRemind = false
+            } else {
+                // Centang dilepas: boleh tampil satu kali lagi pada
+                // peluncuran berikutnya.
+                appSettings.donationRemind = true
+            }
+            shown = false
+        }
+
+        // Latar gelap; menelan semua klik di luar kartu.
+        Rectangle {
+            anchors.fill: parent
+            color: "#000000"
+            opacity: 0.58
+
+            MouseArea {
+                anchors.fill: parent
+            }
+        }
+
+        // Bayangan halus di bawah kartu.
+        Rectangle {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: 7
+            width: donationCard.width
+            height: donationCard.height
+            radius: 16
+            color: "#59000000"
+        }
+
+        Rectangle {
+            id: donationCard
+            anchors.centerIn: parent
+            width: Math.min(456, parent.width - 28)
+            height: Math.min(cardColumn.implicitHeight + 40, parent.height - 28)
+            radius: 16
+            color: "#111e30"
+            border.color: root.panelBorder
+            border.width: 1
+            scale: donationOverlay.shown ? 1 : 0.965
+
+            Behavior on scale {
+                NumberAnimation { duration: 380; easing.type: Easing.OutCubic }
+            }
+
+            // Logo mini wPlay di sudut kanan atas kartu (pola Canvas
+            // yang sama persis dengan logo mini title bar).
+            Rectangle {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 14
+                width: 30
+                height: 30
+                radius: 8
+                border.color: "#2c4a6b"
+                border.width: 1
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#1a2f47" }
+                    GradientStop { position: 1.0; color: "#0b1322" }
+                }
+
+                Canvas {
+                    anchors.fill: parent
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        ctx.strokeStyle = "#7fb2e0"
+                        ctx.lineWidth = 1.6
+                        ctx.lineCap = "round"
+                        const cx = 20, cy = 9.5
+                        for (const r of [3, 5.5, 8]) {
+                            ctx.beginPath()
+                            ctx.arc(cx, cy, r, -1.0, 0.55)
+                            ctx.stroke()
+                        }
+                        ctx.fillStyle = "#7fb2e0"
+                        ctx.beginPath()
+                        ctx.arc(cx, cy, 1.3, 0, Math.PI * 2)
+                        ctx.fill()
+                        ctx.fillStyle = "#f5f8fc"
+                        ctx.beginPath()
+                        ctx.moveTo(10, 10)
+                        ctx.lineTo(10, 20.5)
+                        ctx.lineTo(18.5, 15.25)
+                        ctx.closePath()
+                        ctx.fill()
+                    }
+                }
+            }
+
+            // Isi kartu bisa digeser hanya pada jendela kecil, saat
+            // seluruh isi tidak muat sekaligus.
+            Flickable {
+                id: cardFlick
+                anchors.fill: parent
+                anchors.margins: 20
+                contentWidth: width
+                contentHeight: cardColumn.implicitHeight
+                clip: true
+                interactive: contentHeight > height
+                boundsBehavior: Flickable.StopAtBounds
+
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                }
+
+                ColumnLayout {
+                    id: cardColumn
+                    width: cardFlick.width
+                    spacing: 10
+
+                    // 1) NOTE — sengaja paling atas (permintaan user).
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.rightMargin: 44
+                        text: "NOTE: Pesan ini cuma muncul satu kali — luangkan 10 detik buat baca ya 🙏"
+                        color: "#cd6753"
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.WordWrap
+                        lineHeight: 1.3
+                    }
+
+                    // 2) Hook.
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Senang rasanya bisa nemenin stream kamu."
+                        color: "white"
+                        font.pixelSize: 19
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                        lineHeight: 1.2
+                    }
+
+                    // 3) Isi.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 7
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "wPlay dibuat dengan satu niat sederhana: bikin streamer iPhone bisa live dari PC tanpa ribet — dan tanpa biaya. Nggak ada iklan, nggak ada langganan."
+                            color: "#d5dee9"
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            lineHeight: 1.45
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Kalau selama ini wPlay terasa ngebantu, dan kamu pengen ikut jaga aplikasi ini tetap hidup dan berkembang, kamu bisa traktir secangkir kopi lewat SociaBuzz."
+                            color: "#d5dee9"
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            lineHeight: 1.45
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Sukarela, semampunya. Terima kasih banyak sudah jadi bagian dari perjalanan ini. 🙏"
+                            color: "#d5dee9"
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            lineHeight: 1.45
+                        }
+                    }
+
+                    // 4) Kode QR di atas kartu putih (zona tenang).
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 2
+                        implicitWidth: qrCanvas.width + 18
+                        implicitHeight: qrCanvas.height + 18
+                        radius: 10
+                        color: "white"
+
+                        Canvas {
+                            id: qrCanvas
+                            anchors.centerIn: parent
+                            width: Math.min(180, Math.max(120, root.height - 468))
+                            height: width
+
+                            // Data modul kode QR persis dari gambar
+                            // qr-sociabuzz-oroboo.png (29 x 29 modul;
+                            // isinya tautan root.donationUrl).
+                            property var modules: [
+                                "11111110011001110010001111111",
+                                "10000010111000010100101000001",
+                                "10111010111100101001101011101",
+                                "10111010100000111101101011101",
+                                "10111010010011110001001011101",
+                                "10000010001011100110101000001",
+                                "11111110101010101010101111111",
+                                "00000000111111000010100000000",
+                                "10000010100010110101011001110",
+                                "00111101110000101111000110110",
+                                "11111011100110011100110110000",
+                                "00010100001000101001110001000",
+                                "10100111000101111000101100001",
+                                "00101100101001111011101110011",
+                                "11001111000011110110110101100",
+                                "01110000011101111011100010101",
+                                "00010110110100110100000001100",
+                                "11001001100100011111111110111",
+                                "11010110000101110001101001001",
+                                "10011101010010100001110100000",
+                                "10111110000110000101111110111",
+                                "00000000100101010110100011000",
+                                "11111110010111110101101011100",
+                                "10000010000111010000100010001",
+                                "10111010010001010011111111011",
+                                "10111010010001011110110001101",
+                                "10111010010110010100101111110",
+                                "10000010011000100001000101101",
+                                "11111110100110111101011011100"
+                            ]
+
+                            onPaint: {
+                                const ctx = getContext("2d")
+                                ctx.clearRect(0, 0, width, height)
+                                ctx.fillStyle = "#0e1a2b"
+                                // Kisi 33 x 33: 29 modul + zona tenang
+                                // 2 modul di tiap sisi (sama seperti
+                                // bingkai putih gambar aslinya).
+                                const cell = width / (modules.length + 4)
+                                for (let y = 0; y < modules.length; y++) {
+                                    const row = modules[y]
+                                    for (let x = 0; x < row.length; x++) {
+                                        if (row.charAt(x) === "1")
+                                            ctx.fillRect(Math.floor((x + 2) * cell), Math.floor((y + 2) * cell), Math.ceil(cell), Math.ceil(cell))
+                                    }
+                                }
+                            }
+
+                            onWidthChanged: requestPaint()
+                        }
+                    }
+
+                    // 5) Keterangan di bawah QR.
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Scan pakai kamera HP, atau klik tombol di bawah"
+                        color: root.textDim
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                    }
+
+                    // 6) Baris tombol.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        spacing: 10
+
+                        Button {
+                            id: donateNowBtn
+                            Layout.fillWidth: true
+                            text: "Traktir Kopi ☕"
+                            onClicked: donationOverlay.finishWithDonation()
+
+                            contentItem: Text {
+                                text: donateNowBtn.text
+                                color: "white"
+                                font.pixelSize: 13
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                implicitHeight: 40
+                                radius: 8
+                                color: donateNowBtn.pressed ? "#1d4066" : (donateNowBtn.hovered ? "#2f6db3" : "#26588f")
+                            }
+                        }
+
+                        Button {
+                            id: laterBtn
+                            Layout.fillWidth: true
+                            text: "Nanti Saja"
+                            onClicked: donationOverlay.finishLater()
+
+                            contentItem: Text {
+                                text: laterBtn.text
+                                color: "#d5dee9"
+                                font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                implicitHeight: 40
+                                radius: 8
+                                color: laterBtn.hovered ? "#1a2a42" : "transparent"
+                                border.color: root.panelBorder
+                                border.width: 1
+                            }
+                        }
+                    }
+
+                    // 7) Centang jangan tampilkan lagi.
+                    CheckBox {
+                        id: dontShowCheck
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Jangan tampilkan lagi"
+                        checked: true
+                        spacing: 7
+                        leftPadding: 0
+                        rightPadding: 0
+
+                        contentItem: Text {
+                            text: dontShowCheck.text
+                            color: root.textDim
+                            font.pixelSize: 12
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: dontShowCheck.indicator.width + dontShowCheck.spacing
+                        }
+
+                        indicator: Rectangle {
+                            implicitWidth: 16
+                            implicitHeight: 16
+                            x: dontShowCheck.leftPadding
+                            y: (dontShowCheck.height - height) / 2
+                            radius: 4
+                            color: "transparent"
+                            border.color: "#3a5878"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "✓"
+                                color: root.accent
+                                font.pixelSize: 11
+                                font.bold: true
+                                visible: dontShowCheck.checked
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
