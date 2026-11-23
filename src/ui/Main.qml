@@ -798,7 +798,11 @@ ApplicationWindow {
             }
 
             // Isi kartu bisa digeser hanya pada jendela kecil, saat
-            // seluruh isi tidak muat sekaligus.
+            // seluruh isi tidak muat sekaligus. Batang gulir tidak
+            // pernah ditampilkan (AlwaysOff): pada ukuran bawaan
+            // seluruh isi muat tanpa gulir, dan di jendela kecil
+            // cukup digeser dengan seret/roda tetikus — batang gulir
+            // bawaan yang tebal dan terang merusak tampilan kartu.
             Flickable {
                 id: cardFlick
                 anchors.fill: parent
@@ -810,13 +814,13 @@ ApplicationWindow {
                 boundsBehavior: Flickable.StopAtBounds
 
                 ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
+                    policy: ScrollBar.AlwaysOff
                 }
 
                 ColumnLayout {
                     id: cardColumn
                     width: cardFlick.width
-                    spacing: 10
+                    spacing: 8
 
                     // 1) NOTE — sengaja paling atas (permintaan user).
                     Label {
@@ -844,7 +848,7 @@ ApplicationWindow {
                     // 3) Isi.
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 7
+                        spacing: 6
 
                         Label {
                             Layout.fillWidth: true
@@ -877,7 +881,6 @@ ApplicationWindow {
                     // 4) Kode QR di atas kartu putih (zona tenang).
                     Rectangle {
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.topMargin: 2
                         implicitWidth: qrCanvas.width + 18
                         implicitHeight: qrCanvas.height + 18
                         radius: 10
@@ -886,7 +889,7 @@ ApplicationWindow {
                         Canvas {
                             id: qrCanvas
                             anchors.centerIn: parent
-                            width: Math.min(180, Math.max(120, root.height - 468))
+                            width: Math.min(168, Math.max(120, root.height - 488))
                             height: width
 
                             // Data modul kode QR persis dari gambar
@@ -958,7 +961,6 @@ ApplicationWindow {
                     // 6) Baris tombol.
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.topMargin: 2
                         spacing: 10
 
                         Button {
