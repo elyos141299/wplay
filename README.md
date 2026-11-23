@@ -6,7 +6,7 @@
 
 ![Lisensi](https://img.shields.io/badge/license-AGPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
-![Versi](https://img.shields.io/badge/version-0.1.1-green)
+![Versi](https://img.shields.io/badge/version-0.1.3-green)
 
 ## Tampilan
 
@@ -51,6 +51,14 @@ Unduh installer versi terbaru dari halaman
 (`wPlay-Setup.exe`), lalu jalankan seperti memasang aplikasi Windows
 biasa. Bila Windows menampilkan SmartScreen, pilih **More info → Run
 anyway** (aplikasi ini belum memiliki tanda tangan digital).
+
+**Kebijakan tanda tangan kode:** wPlay sedang mengajukan tanda tangan
+kode gratis untuk proyek open source dari **SignPath Foundation**.
+Bila disetujui, penandatanganan akan dilakukan oleh SignPath
+Foundation atas nama proyek ini, terhadap file yang dibangun
+otomatis dari kode sumber publik di repo ini. Selama proses itu
+berjalan, installer masih belum bertanda tangan, jadi SmartScreen
+di atas masih bisa muncul.
 
 ## Cara pakai
 
