@@ -40,6 +40,12 @@
 //   digambar via Canvas dari data modul gambar aslinya — pola
 //   yang sama dengan logo (aplikasi tidak punya aset gambar;
 //   semua grafis digambar Canvas).
+// - 23 Nov 2026 (permintaan user): LABEL VERSI di layar tunggu +
+//   PERIKSA PEMBARUAN semi-otomatis — aplikasi mengecek rilis
+//   terbaru di GitHub Releases (diam total selama repo masih
+//   privat atau jaringan gagal), dialog menawarkan unduh
+//   installer baru; pemasangan tetap manual oleh user
+//   (upgrade di tempat via AppId installer yang sama).
 
 import QtQuick
 import QtQuick.Controls
@@ -76,6 +82,18 @@ ApplicationWindow {
     // Tautan donasi SociaBuzz (pop-up donasi + tombol hati).
     readonly property string donationUrl: "https://sociabuzz.com/oroboo/tribe"
 
+    // Versi aplikasi. WAJIB selalu sama dengan #define AppVersion
+    // di installer/wplay.iss — keduanya diubah bersamaan tiap rilis.
+    readonly property string appVersion: "0.1.3"
+
+    // Periksa Pembaruan: endpoint rilis terbaru di GitHub. Selama
+    // repo masih privat, API ini menjawab 404 untuk permintaan
+    // tanpa login dan fitur pembaruan diam total (disengaja);
+    // fitur hidup sendiri begitu repo publik + Release pertama
+    // diterbitkan — tanpa perlu build ulang.
+    readonly property string latestReleaseApi: "https://api.github.com/repos/elyos141299/wplay/releases/latest"
+    readonly property string releasesPageUrl: "https://github.com/elyos141299/wplay/releases"
+
     // Persistensi pop-up donasi (QtCore Settings -> QSettings):
     // donationSeen    = pop-up sudah diselesaikan user (klik donasi,
     //                   atau tutup dengan centang aktif).
@@ -86,10 +104,123 @@ ApplicationWindow {
         id: appSettings
         property bool donationSeen: false
         property bool donationRemind: true
+        // Tag rilis yang pernah ditolak user lewat "Nanti Saja" di
+        // dialog pembaruan — cek otomatis tidak menampilkannya lagi.
+        property string updateDismissedTag: ""
     }
 
     function openDonationPopup() {
         donationOverlay.openPopup()
+    }
+
+    // ---------------------------------------------------------------
+    // Periksa Pembaruan (semi-otomatis). Cek otomatis berjalan
+    // sekali beberapa detik setelah start dan DIAM TOTAL pada
+    // kegagalan apa pun (offline, timeout, HTTP 404 selama repo
+    // privat, JSON tak valid) — tidak ada pesan error, tidak ada
+    // dialog. Cek manual (tombol di layar tunggu) memakai jalur
+    // yang sama tetapi memberi umpan balik teks sesaat.
+    // ---------------------------------------------------------------
+
+    // Dialog otomatis tampil maksimal sekali per sesi.
+    property bool updateAutoShown: false
+    // Data rilis yang menunggu keputusan user di dialog:
+    // { tag, notes, downloadUrl } — null bila belum ada.
+    property var pendingUpdate: null
+
+    // Bandingkan dua versi secara numerik per komponen, sehingga
+    // "0.1.10" lebih baru dari "0.1.9" (perbandingan string biasa
+    // akan salah di sini). Hasil: 1 bila a > b, -1 bila a < b,
+    // 0 bila sama. Komponen yang hilang dianggap 0.
+    function compareVersions(a, b) {
+        const pa = String(a).split(".")
+        const pb = String(b).split(".")
+        const n = Math.max(pa.length, pb.length)
+        for (let i = 0; i < n; i++) {
+            const na = i < pa.length ? parseInt(pa[i], 10) : 0
+            const nb = i < pb.length ? parseInt(pb[i], 10) : 0
+            const va = isNaN(na) ? 0 : na
+            const vb = isNaN(nb) ? 0 : nb
+            if (va !== vb)
+                return va > vb ? 1 : -1
+        }
+        return 0
+    }
+
+    function checkForUpdates(manual) {
+        const xhr = new XMLHttpRequest()
+        xhr.open("GET", root.latestReleaseApi)
+        xhr.setRequestHeader("Accept", "application/vnd.github+json")
+        xhr.setRequestHeader("User-Agent", "wPlay/" + root.appVersion)
+        xhr.timeout = 10000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE)
+                root.handleUpdateResponse(xhr, manual)
+        }
+        xhr.ontimeout = function() {
+            if (manual)
+                root.showUpdateStatus("Tidak bisa memeriksa saat ini")
+        }
+        xhr.send()
+    }
+
+    function handleUpdateResponse(xhr, manual) {
+        if (xhr.status !== 200) {
+            // 404 selama repo privat / belum ada Release, atau
+            // gangguan jaringan: otomatis diam; manual memberi tahu.
+            if (manual)
+                root.showUpdateStatus("Tidak bisa memeriksa saat ini")
+            return
+        }
+        let rel
+        try {
+            rel = JSON.parse(xhr.responseText)
+        } catch (e) {
+            if (manual)
+                root.showUpdateStatus("Tidak bisa memeriksa saat ini")
+            return
+        }
+        // tag_name berbentuk "v0.2.0" — buang awalan "v".
+        const tag = String(rel.tag_name || "").replace(/^v/, "")
+        if (tag === "" || root.compareVersions(tag, root.appVersion) <= 0) {
+            if (manual)
+                root.showUpdateStatus("Sudah versi terbaru ✓")
+            return
+        }
+        // Ada versi lebih baru. Utamakan aset .exe (installer);
+        // bila tidak ada, pakai halaman rilisnya.
+        let downloadUrl = rel.html_url || root.releasesPageUrl
+        const assets = rel.assets || []
+        for (let i = 0; i < assets.length; i++) {
+            const name = String(assets[i].name || "")
+            if (name.toLowerCase().endsWith(".exe") && assets[i].browser_download_url) {
+                downloadUrl = assets[i].browser_download_url
+                break
+            }
+        }
+        root.pendingUpdate = {
+            "tag": tag,
+            "notes": String(rel.body || ""),
+            "downloadUrl": downloadUrl
+        }
+        if (!manual) {
+            // Anti-nag cek otomatis: sekali per sesi, tidak untuk
+            // tag yang pernah ditolak, dan tidak menumpuk pop-up
+            // donasi yang sedang terbuka.
+            if (root.updateAutoShown || donationOverlay.shown)
+                return
+            if (appSettings.updateDismissedTag === tag)
+                return
+            root.updateAutoShown = true
+        }
+        updateOverlay.openPopup()
+    }
+
+    // Umpan balik sesaat di sebelah label versi (cek manual saja).
+    function showUpdateStatus(text) {
+        updateStatusLabel.text = text
+        updateStatusLabel.visible = true
+        updateStatusTimer.restart()
     }
 
     // CATATAN: fitur ukuran jendela mengikuti rasio mirror pernah
@@ -123,6 +254,7 @@ ApplicationWindow {
     Component.onCompleted: {
         initTimer.start()
         donationTimer.start()
+        updateCheckTimer.start()
     }
 
     onClosing: AirplayImp.cleanup()
@@ -164,6 +296,23 @@ ApplicationWindow {
             if (!appSettings.donationSeen && appSettings.donationRemind)
                 root.openDonationPopup()
         }
+    }
+
+    // Cek pembaruan otomatis: sekali, beberapa detik setelah
+    // aplikasi start (pola timer yang sama dengan pop-up donasi).
+    Timer {
+        id: updateCheckTimer
+        interval: 3500
+        repeat: false
+        onTriggered: root.checkForUpdates(false)
+    }
+
+    // Menyembunyikan teks status periksa pembaruan setelah sesaat.
+    Timer {
+        id: updateStatusTimer
+        interval: 4000
+        repeat: false
+        onTriggered: updateStatusLabel.visible = false
     }
 
 
@@ -609,6 +758,49 @@ ApplicationWindow {
                     font.pixelSize: 12
                 }
             }
+
+            // Label versi + tombol periksa pembaruan: sudut bawah
+            // layar tunggu saja — tidak pernah tampil di atas video
+            // saat mirroring (visible terikat !clientConnected).
+            RowLayout {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.margins: 14
+                spacing: 10
+                visible: !root.clientConnected
+
+                Label {
+                    text: "wPlay v" + root.appVersion
+                    color: root.textDim
+                    font.pixelSize: 11
+                }
+
+                Button {
+                    id: updateCheckBtn
+                    text: "Periksa Pembaruan"
+                    onClicked: root.checkForUpdates(true)
+
+                    contentItem: Text {
+                        text: updateCheckBtn.text
+                        color: updateCheckBtn.hovered ? root.accent : root.textDim
+                        font.pixelSize: 11
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        implicitHeight: 20
+                        color: "transparent"
+                    }
+                }
+
+                // Umpan balik sesaat untuk cek manual ("Sudah versi
+                // terbaru ✓" / "Tidak bisa memeriksa saat ini").
+                Label {
+                    id: updateStatusLabel
+                    visible: false
+                    color: root.accent
+                    font.pixelSize: 11
+                }
+            }
         }
     }
 
@@ -670,6 +862,172 @@ ApplicationWindow {
         height: 6
         cursorShape: Qt.SizeBDiagCursor
         onPressed: root.startSystemResize(Qt.RightEdge | Qt.TopEdge)
+    }
+
+    // ---------------------------------------------------------------
+    // Dialog pembaruan: gaya visual sama persis dengan kartu
+    // donasi (overlay redup, kartu navy radius 16, tombol primer
+    // baja + ghost). Ditempatkan SEBELUM overlay donasi di pohon
+    // objek, jadi bila keduanya bersamaan, kartu donasi selalu
+    // berada di atas. Klik pada latar tidak menutup dialog.
+    // ---------------------------------------------------------------
+    Item {
+        id: updateOverlay
+        anchors.fill: parent
+        visible: opacity > 0
+        opacity: shown ? 1 : 0
+
+        property bool shown: false
+
+        Behavior on opacity {
+            NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+        }
+
+        function openPopup() {
+            shown = true
+        }
+
+        function downloadUpdate() {
+            if (root.pendingUpdate)
+                Qt.openUrlExternally(root.pendingUpdate.downloadUrl)
+            shown = false
+        }
+
+        function dismissUpdate() {
+            // Anti-nag: tag ini tidak ditawarkan lagi oleh cek
+            // otomatis (cek manual tetap boleh menampilkannya).
+            if (root.pendingUpdate)
+                appSettings.updateDismissedTag = root.pendingUpdate.tag
+            shown = false
+        }
+
+        // Latar gelap; menelan semua klik di luar kartu.
+        Rectangle {
+            anchors.fill: parent
+            color: "#000000"
+            opacity: 0.58
+
+            MouseArea {
+                anchors.fill: parent
+            }
+        }
+
+        // Bayangan halus di bawah kartu.
+        Rectangle {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: 7
+            width: updateCard.width
+            height: updateCard.height
+            radius: 16
+            color: "#59000000"
+        }
+
+        Rectangle {
+            id: updateCard
+            anchors.centerIn: parent
+            width: Math.min(456, parent.width - 28)
+            height: Math.min(updateColumn.implicitHeight + 40, parent.height - 28)
+            radius: 16
+            color: "#111e30"
+            border.color: root.panelBorder
+            border.width: 1
+            scale: updateOverlay.shown ? 1 : 0.965
+
+            Behavior on scale {
+                NumberAnimation { duration: 380; easing.type: Easing.OutCubic }
+            }
+
+            ColumnLayout {
+                id: updateColumn
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 10
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.pendingUpdate ? "Versi " + root.pendingUpdate.tag + " Tersedia" : ""
+                    color: "white"
+                    font.pixelSize: 17
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.2
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: root.pendingUpdate ? "wPlay " + root.pendingUpdate.tag + " sudah rilis (kamu memakai v" + root.appVersion + ")." : ""
+                    color: "#d5dee9"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.45
+                }
+
+                // Catatan rilis dari GitHub (teks polos, dipotong
+                // wajar bila panjang). Sembunyi bila kosong.
+                Label {
+                    Layout.fillWidth: true
+                    visible: text !== ""
+                    text: {
+                        if (!root.pendingUpdate)
+                            return ""
+                        const notes = root.pendingUpdate.notes.trim()
+                        return notes.length > 400 ? notes.substring(0, 400) + "…" : notes
+                    }
+                    color: root.textDim
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.45
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Button {
+                        id: updateNowBtn
+                        Layout.fillWidth: true
+                        text: "Unduh Pembaruan"
+                        onClicked: updateOverlay.downloadUpdate()
+
+                        contentItem: Text {
+                            text: updateNowBtn.text
+                            color: "white"
+                            font.pixelSize: 13
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            implicitHeight: 40
+                            radius: 8
+                            color: updateNowBtn.pressed ? "#1d4066" : (updateNowBtn.hovered ? "#2f6db3" : "#26588f")
+                        }
+                    }
+
+                    Button {
+                        id: updateLaterBtn
+                        Layout.fillWidth: true
+                        text: "Nanti Saja"
+                        onClicked: updateOverlay.dismissUpdate()
+
+                        contentItem: Text {
+                            text: updateLaterBtn.text
+                            color: "#d5dee9"
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            implicitHeight: 40
+                            radius: 8
+                            color: updateLaterBtn.hovered ? "#1a2a42" : "transparent"
+                            border.color: root.panelBorder
+                            border.width: 1
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------

@@ -10,7 +10,7 @@
 ; (installer/), so dist/ and assets/ are reached via "..\".
 
 #define AppName "wPlay"
-#define AppVersion "0.1.2"
+#define AppVersion "0.1.3"
 #define AppExeName "wplay.exe"
 
 [Setup]
