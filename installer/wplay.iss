@@ -26,11 +26,8 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir={#SourcePath}..\installer-output
 OutputBaseFilename=wPlay-Setup
-; No SetupIconFile: the repo carries the icon only as assets/icon_hex.txt
-; (binary .ico files cannot be pushed through the connector), so there
-; is no .ico file for the compiler to read. The installed shortcuts and
-; the uninstall entry use wplay.exe's own embedded icon instead.
-; No LicenseFile either, until the licenses/ files' presence in the
+SetupIconFile={#SourcePath}..\assets\wplay.ico
+; No LicenseFile, until the licenses/ files' presence in the
 ; repo is verified — a missing LicenseFile aborts the compile.
 Compression=lzma2
 SolidCompression=yes
